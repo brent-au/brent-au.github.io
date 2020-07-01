@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>AWS IAM Principal Validation</title>
+    <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+
+
+<link rel="stylesheet" href="/assets/css/bootstrap.min.css" />
+<link rel="stylesheet" href="/assets/css/style.css" />
+<link rel="stylesheet" href="/assets/css/navbar.css" />
+
+
+<link href="https://fonts.googleapis.com/css2?family=Muli:wght@300;400;500;600" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/all.min.css" />
+
+
+<link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+
+
+    
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.1/styles/atom-one-dark.min.css"
+/>
+<link rel="stylesheet" href="/assets/css/single.css" />
+
+
+    
+    
+  </head>
+
+  <body>
+    <div class="container-fluid bg-dimmed wrapper">
+      
+      
+    <nav class="navbar navbar-expand-lg top-navbar final-navbar shadow">
+    <div class="container">
+      <a class="navbar-brand" href="/posts">
+        Brent</a>
+      <button class="navbar-toggler navbar-light" type="button" >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="top-nav-items">
+        <ul class="navbar-nav ml-auto">
+        </ul>
+      </div>
+    </div>
+</nav>
+
+
+
+      
+      
+<div class="container p-0 read-area">
+  
+  <div class="hero-area col-sm-12" style='background-image: url(/images/post-headers/aws-iam-principal-validation.jpg);'>
+  </div>
+
+  
+  <div class="page-content">
+    <div class="author-profile ml-auto align-self-lg-center">
+      <img class="rounded-circle" src='/images/avatar.jpg'/>
+      <h5 class="author-name">Brent Harrison</h5>
+      <p>July 1, 2020</p>
+    </div>
+
+    <div class="title">
+      <h1>AWS IAM Principal Validation</h1>
+    </div>
+
+    <div class="post-content" id="post-content">
+      <p>For the AWS IAM service, a <code>Principal</code> element is used to specify an entity that
+is allowed (or denied) access to the resource. This is only applicable to IAM
+roles, where the principal is an entity who can assume that role, or in a
+resource-based policy where the entity is being allowed access to the resource,
+such as an S3 bucket<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup>.</p>
+<p>An example of an Elasticsearch resource-based policy (often referred to as a
+domain access policy in the Elasticsearch context) is provided below:</p>
+<pre><code>{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [
+    {
+      &quot;Effect&quot;: &quot;Allow&quot;,
+      &quot;Principal&quot;: {
+        &quot;AWS&quot;: [
+          &quot;111111111111&quot;,
+          &quot;arn:aws:iam::222222222222:user/test-user&quot;,
+          &quot;arn:aws:iam::333333333333:role/role-name&quot;,
+          &quot;arn:aws:sts::333333333333:assumed-role/role-name/role-session-name&quot;
+        ]
+      },
+      &quot;Action&quot;: [
+        &quot;es:*&quot;
+      ],
+      &quot;Resource&quot;: &quot;arn:aws:es:ap-southeast-2:111111111111:domain/test-domain/*&quot;
+    }
+  ]
+}
+</code></pre><div style="text-align: center;">
+<p><em>Example domain access policy for an Elasticsearch cluster, showing AWS Account
+Id, assumed-role and AWS IAM role principal types</em></p>
+</div>
+<p>Recently whilst deploying an Elasticsearch <a href="https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-ac.html#es-ac-types-resource">domain access
+policy</a>,
+I was wrestling with an error that AWS kept replying with. I initially thought
+I&rsquo;d fat-fingered the ARN for the role and that an extra colon or an extraneous
+segment had slipped in somewhere. After some double-checking I noted that when I
+was deploying the POC, the role had already existed when I updated the domain
+access policy.</p>
+<p>So I decided to test whether order was important - does a principal need to
+exist before you add it to an trust or resource policy? The test would be simple enough:</p>
+<ol>
+<li>Create a dummy IAM role (i.e. don&rsquo;t attach any permissions to it)</li>
+<li>Assign a principal to it that clearly doesn&rsquo;t exist (e.g. use an <a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions">AWS ELB
+account
+id</a>
+combined with a random string for the role name to test)</li>
+<li>Assign a principal to it that does exist (try a role from a different account
+you control)</li>
+</ol>
+<p>The behaviours observed from this test were:</p>
+<ul>
+<li>Applying/updating a policy with a principal that <strong>does</strong> exist <em>will work</em></li>
+<li>Applying/updating a policy with a principal that <strong>does not</strong> exist <em>will not work</em></li>
+</ul>
+<p><img src="/images/posts/aws-iam-principal-validation/iam-error.png"
+    
+    
+    
+    
+    
+        class="center"
+    
+>
+
+<br/>
+I was a bit surprised by this behaviour when I observed it. On the one hand,
+it&rsquo;s useful for preventing errors/typos in principals - IAM is complex enough
+without typos being introduced! But on the other hand it does provide a way to
+scout other AWS accounts by enumeration. For example, by enumerating updates to
+the principals in a trust statement I could:</p>
+<ul>
+<li>Determine whether an AWS Account Id is valid</li>
+<li>Determine whether a role or user exists in another AWS account</li>
+</ul>
+<p>Actively enumerating and exploring other AWS accounts in this manner is likely a
+violation of service agreements and not covered by the <a href="https://aws.amazon.com/security/penetration-testing/">Customer Service Policy
+for Penetration Testing</a>
+so running this as a script or automation at scale is likely going to get your
+account on an abuse report, so I <em>definitely</em> do not recommend performing these
+actions.</p>
+<p>As I was a bit concerned by this behaviour, I fired a short email explaining
+what I observed to <a href="mailto:aws-security@amazon.com">aws-security@amazon.com</a>, as per the <a href="https://aws.amazon.com/security/vulnerability-reporting/">Vulnerability Reporting
+practice</a>. I was
+interested to determine whether this was a known &amp; accepted behaviour, I
+expected that it was, but it&rsquo;s good to be sure. The reply was quite rapid
+returning within a few hours:</p>
+<blockquote>
+<p>Hi Brent,</p>
+<p>Thank you for bringing your security concern to our attention. We greatly
+appreciate and encourage reports from the security community worldwide.</p>
+<p>We do not believe the behavior you describe in this report presents a security
+concern, rather, it is expected behavior.</p>
+<p>If you discover or become aware of other security concerns specific to AWS
+products and services, please do not hesitate to contact us again at
+<a href="mailto:aws-security@amazon.com">aws-security@amazon.com</a></p>
+</blockquote>
+<p>This at least confirmed that it was expected behaviour, and they likely have
+mitigating controls that offset the risk of abuse (I presume).</p>
+<p>I did later find one benefit to this behaviour other than user experience. As
+per the documentation, if you specify an IAM role as a principal in a role trust
+policy, AWS transforms the ARN to the role&rsquo;s unique principal ID when saved.
+This happed in the background and the console will translate this to the
+&lsquo;friendly&rsquo; role ARN when you view the trust policy for the role. What this
+prevents is escalation by deleting the trusted role (wherever it exists) and
+recreating it as the new role will have a different unique principal ID to that
+which was saved when creating the trust relationship<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">2</a></sup>.</p>
+<p>This is a reasonable trade-off to the potential for abuse described above, but
+it also informs us that we can&rsquo;t destroy &amp; recreate roles that are trusted
+without consequence.</p>
+<hr>
+<p>I hope you found the above blog post of interest and informative, I definitely
+learned a bit more about IAM principals going through the process!</p>
+<blockquote>
+<p><strong>tl;dr</strong> AWS will validate an IAM Principal across unrelated acccounts, allowing
+for the validation of an AWS Account ID &amp; whether a role exists in that
+account. This is an accepted behaviour.</p>
+</blockquote>
+<hr>
+<p>The image header for this blogpost was created by <a href="https://unsplash.com/@kaibrame">Kai
+Brame</a> their work can be found as linked and
+amongst others on <a href="https://unsplash.com/">Unsplash</a>.</p>
+<section class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn:1" role="doc-endnote">
+<p>As explained in the official <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html">AWS IAM
+documentation</a>
+as of date of this post. <a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+<li id="fn:2" role="doc-endnote">
+<p>Detailed explanation of IAM roles as principals in Trust Policy behaviour
+<a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html#principal-roles">found
+here</a>,
+and relied upon as of date of this post. <a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></p>
+</li>
+</ol>
+</section>
+
+    </div>
+
+    
+    
+
+    
+  <hr />
+    <div class="row next-prev-navigator">
+
+
+  
+    
+    
+  
+
+</div>
+
+  <hr />
+  
+  
+</div>
+
+    </div>
+
+    <footer class="container-fluid text-center align-content-center footer pb-2">
+  <div class="container pt-5">
+    <div class="row text-left">
+      <div class="col-md-4 col-sm-12">
+        <h5>Navigation</h5>
+        
+        <ul>
+            
+            <li class="nav-item">
+              <a class="smooth-scroll" href="#about">About</a>
+            </li>
+            
+            
+            <li class="nav-item">
+              <a class="smooth-scroll" href="#experiences">Experiences</a>
+            </li>
+            
+            
+            <li class="nav-item">
+              <a class="smooth-scroll" href="#recent-posts">Recent Posts</a>
+            </li>
+            
+            
+            <li class="nav-item">
+              <a class="smooth-scroll" href="#achievements">Achievements</a>
+            </li>
+            
+        </ul>
+        
+
+      </div>
+      <div class="col-md-4 col-sm-12">
+        <h5>Contact Me</h5>
+        <ul>
+          
+          <li><span>Email: </span> <span>brent@brentharrison.id.au</span></li>
+          
+        </ul>
+      </div>
+      <div class="col-md-4 col-sm-12">
+        
+        <p>Stay up to date with email notification</p>
+        <form>
+          <div class="form-group">
+            <input
+              type="email"
+              class="form-control"
+              id="exampleInputEmail1"
+              aria-describedby="emailHelp"
+              placeholder="Enter email"
+            />
+            <small id="emailHelp" class="form-text text-muted"
+              >We'll never share your email with anyone else.</small
+            >
+          </div>
+          <button type="submit" class="btn btn-info">Submit</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <hr />
+  <div class="container">
+    <div class="row text-left">
+      <div class="col-md-4">
+        <a id="theme" href="https://github.com/hossainemruz/toha" target="#">
+          
+          Hugo theme (Toha)
+        </a>
+      </div>
+      <div class="col-md-4">© 2020 Copyright.</div>
+      <div class="col-md-4">
+        Powered by <a href="https://gohugo.io/">Hugo
+        <img
+          src="/assets/images/hugo-logo-wide.svg"
+          alt="Hugo Logo"
+          height="18"
+        />
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+    <script src="/assets/js/jquery-3.4.1.min.js"></script>
+<script src="/assets/js/bootstrap.min.js"></script>
+
+<script src="/assets/js/navbar.js"></script>
+<script src="/assets/js/jquery.filterizr.min.js"></script>
+
+
+    
+    
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.1/highlight.min.js"></script>
+<script src="/assets/js/single.js"></script>
+<script>
+  hljs.initHighlightingOnLoad();
+</script>
+
+
+  </body>
+</html>

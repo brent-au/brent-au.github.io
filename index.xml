@@ -6,18 +6,19 @@
     <description>Recent content on Brent</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 01 Jul 2020 00:35:09 +1000</lastBuildDate>
+    <lastBuildDate>Wed, 01 Jul 2020 22:35:00 +1000</lastBuildDate>
     
 	<atom:link href="https://brent-au.github.io/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>Test Post</title>
-      <link>https://brent-au.github.io/posts/aws/test-post/</link>
-      <pubDate>Wed, 01 Jul 2020 00:35:09 +1000</pubDate>
+      <title>AWS IAM Principal Validation</title>
+      <link>https://brent-au.github.io/posts/aws/aws-iam-principal-validation/</link>
+      <pubDate>Wed, 01 Jul 2020 22:35:00 +1000</pubDate>
       
-      <guid>https://brent-au.github.io/posts/aws/test-post/</guid>
-      <description>Post</description>
+      <guid>https://brent-au.github.io/posts/aws/aws-iam-principal-validation/</guid>
+      <description>For the AWS IAM service, a Principal element is used to specify an entity that is allowed (or denied) access to the resource. This is only applicable to IAM roles, where the principal is an entity who can assume that role, or in a resource-based policy where the entity is being allowed access to the resource, such as an S3 bucket1.
+An example of an Elasticsearch resource-based policy (often referred to as a domain access policy in the Elasticsearch context) is provided below:</description>
     </item>
     
   </channel>
